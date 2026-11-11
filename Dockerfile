@@ -2,7 +2,7 @@ FROM pgvector/pgvector:0.8.5-pg18 AS pgvector
 
 FROM postgres:18-bookworm
 ARG VECTORCHORD_VERSION=1.1.1
-ARG TARGETARCH=amd64
+ARG TARGETARCH # BuildKit supplies native target: amd64 or arm64
 
 COPY --from=pgvector /usr/lib/postgresql/18/lib/vector.so /usr/lib/postgresql/18/lib/vector.so
 COPY --from=pgvector /usr/share/postgresql/18/extension/vector.control /usr/share/postgresql/18/extension/vector.control
