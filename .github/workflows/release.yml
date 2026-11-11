@@ -56,7 +56,14 @@ jobs:
             | tee /tmp/extensions.log
           grep -F 'vchord' /tmp/extensions.log
           grep -F 'vector' /tmp/extensions.log
-          test "$(docker inspect cloud9-immich-pg-canary --format '{{.State.Health.Status}}')" = healthy
+          healthy=no
+          for i in $(seq 1 40);do
+            if [ "$(docker inspect cloud9-immich-pg-canary --format '{{.State.Health.Status}}')" = healthy ];then
+              healthy=yes;break
+            fi
+            sleep 3
+          done
+          if [ "$healthy" != yes ];then docker logs --tail 90 cloud9-immich-pg-canary;exit 1;fi
           docker rm -f cloud9-immich-pg-canary >/dev/null
           echo CLOUD9_IMMICH_PG18_VECTORCHORD_VECTOR_SSD_HEALTH_PASS
       - uses: docker/login-action@v3
