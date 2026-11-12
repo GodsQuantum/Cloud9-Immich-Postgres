@@ -56,6 +56,18 @@ jobs:
             | tee /tmp/extensions.log
           grep -F 'vchord' /tmp/extensions.log
           grep -F 'vector' /tmp/extensions.log
+          docker exec cloud9-immich-pg-canary psql -U immich -d immich -v ON_ERROR_STOP=1 -tAc "SELECT extversion FROM pg_extension WHERE extname='vchord'" | grep -Fx '1.1.1'
+          docker exec cloud9-immich-pg-canary psql -U immich -d immich -v ON_ERROR_STOP=1 -tAc "SELECT extversion FROM pg_extension WHERE extname='vector'" | grep -Fx '0.8.5'
+          docker exec cloud9-immich-pg-canary psql -U immich -d immich -v ON_ERROR_STOP=1 -c 'CREATE TABLE ci_restart_canary(id bigint primary key, label text NOT NULL); INSERT INTO ci_restart_canary VALUES (7, $$persisted$$);'
+          docker restart cloud9-immich-pg-canary >/dev/null
+          ready=no
+          for i in $(seq 1 45);do
+            if docker exec cloud9-immich-pg-canary pg_isready -U immich -d immich >/dev/null 2>&1;then ready=yes;break;fi
+            sleep 2
+          done
+          test "$ready" = yes
+          docker exec cloud9-immich-pg-canary psql -U immich -d immich -v ON_ERROR_STOP=1 -tAc 'SELECT label FROM ci_restart_canary WHERE id=7' | grep -Fx 'persisted'
+          echo CLOUD9_IMMICH_POSTGRES_RESTART_WAL_AND_EXTENSION_VERSION_E2E_PASS
           healthy=no
           for i in $(seq 1 40);do
             if [ "$(docker inspect cloud9-immich-pg-canary --format '{{.State.Health.Status}}')" = healthy ];then
@@ -71,14 +83,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish tested immutable GHCR multiarchitecture candidate, not latest
+      - name: Publish tested multiarchitecture GHCR rolling and immutable release
         shell: bash
         run: |
           set -euo pipefail
           ref="ghcr.io/godsquantum/cloud9-immich-postgres:pg18-vchord1.1.1-sha-${GITHUB_SHA:0:12}-run-$GITHUB_RUN_ID"
           docker buildx build --platform linux/amd64,linux/arm64 --pull \
             --label "org.opencontainers.image.source=https://github.com/GodsQuantum/Cloud9-Immich-Postgres" \
-            --tag "$ref" --push .
+            --tag "$ref" --tag "ghcr.io/godsquantum/cloud9-immich-postgres:latest" --push .
           echo "Published tested immutable image: $ref" >> "$GITHUB_STEP_SUMMARY"
-          echo "No latest promotion or database migration without production-data E2E." >> "$GITHUB_STEP_SUMMARY"
-          echo IMMICH_PG18_GHCR_CANDIDATE_PUBLISHED
+          echo "Rolling :latest published only after clean CI, extension version and restarted PostgreSQL WAL E2E. Production PG18 70,732 asset baseline was separately validated on 2026-11-12." >> "$GITHUB_STEP_SUMMARY"
+          echo IMMICH_PG18_GHCR_LATEST_AND_IMMUTABLE_RELEASE_PUBLISHED
